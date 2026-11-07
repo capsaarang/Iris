@@ -1,6 +1,6 @@
 'use strict';
 /* Iris: a personal, ad-free news reader. Everything stays on this phone. */
-const VERSION = '1.0.2';
+const VERSION = '1.0.3';
 const DEFAULT_RELAY = 'https://isai-relay.saarangharrypotter.workers.dev';
 
 /* ---------- sources ---------- */
@@ -208,6 +208,8 @@ function parseFeed(xml, src) {
     }
     if (!img) img = firstImg(full) || firstImg(rawDesc);
     if (img && img.startsWith('//')) img = 'https:' + img;
+    if (!/^https?:\/\//i.test(img)) img = '';
+    if (!/^https?:\/\//i.test(link)) continue;
     const dEl = kid(it, 'pubdate', 'pubDate', 'published', 'updated', 'dc:date');
     let t = dEl ? Date.parse(dEl.textContent.trim()) : NaN;
     // no date in the feed: place it a few hours back so it doesn't sit on top of fresh news
@@ -271,11 +273,12 @@ function group(items) {
     let best = null, bestScore = 0;
     for (const [g, shared] of cand) {
       if (shared < 3 || Math.abs(g.lead.t - it.t) > 36 * 3600e3) continue;
+      const base = Math.min(g.tk.length, tk.length * 1.5);
       if (g.lead.src === it.src || g.also.some(a => a.src === it.src)) continue;
-      const score = shared / (g.tk.length + tk.length - shared);
+      const score = shared / (base + tk.length - shared);
       if (score >= 0.4 && score > bestScore) { best = g; bestScore = score; }
     }
-    if (best) { best.also.push(it); if (!best.lead.img && it.img) best.img = it.img; continue; }
+    if (best) { best.also.push(it); if (!best.img && it.img) best.img = it.img; for (const w of tk) { if (!best.tk.includes(w)) { best.tk.push(w); (index.get(w) || index.set(w, []).get(w)).push(best); } } continue; }
     const g = { lead: it, also: [], tk, img: it.img };
     groups.push(g); for (const w of tk) { if (!index.has(w)) index.set(w, []); index.get(w).push(g); }
   }
@@ -492,7 +495,7 @@ async function loadMarkets() {
     } catch { return null; }
   }));
   const ok = out.filter(Boolean);
-  if (ok.length) { S.mk = ok; LS.set('mk', ok); if (S.tab === 'home' && !layerOpen) render(true); }
+  if (ok.length) { S.mk = ok; LS.set('mk', { at: Date.now(), list: ok }); if (S.tab === 'home' && !layerOpen) render(true); }
 }
 
 /* ---------- taps ---------- */
@@ -545,12 +548,13 @@ function setThemeColor() { const m = document.querySelector('meta[name="theme-co
 /* ---------- start ---------- */
 (async function boot() {
   applyFs(); setThemeColor();
-  S.mk = LS.get('mk', null);
+  { const c = LS.get('mk', null); S.mk = c && c.list && Date.now() - c.at < 3 * 864e5 ? c.list : null; }
   try { const c = await DB.get('items'); if (c) { S.items = c.items || []; S.fetchedAt = c.at || 0; } } catch { }
   render();
   if (Date.now() - S.fetchedAt > 10 * 60e3) refresh();
   loadMarkets();
   setInterval(() => { if (!document.hidden) loadMarkets(); }, 5 * 60e3);
+  setInterval(() => { if (!document.hidden && !S.loading) renderSub(); }, 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - S.fetchedAt > 10 * 60e3) refresh(); });
   window.addEventListener('online', () => refresh());
   if ('serviceWorker' in navigator) {
