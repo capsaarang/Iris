@@ -1,6 +1,6 @@
 'use strict';
 /* Iris: a personal, ad-free news reader. Everything stays on this phone. */
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';
 const DEFAULT_RELAY = 'https://isai-relay.saarangharrypotter.workers.dev';
 
 /* ---------- sources ---------- */
@@ -210,7 +210,9 @@ function parseFeed(xml, src) {
     if (img && img.startsWith('//')) img = 'https:' + img;
     const dEl = kid(it, 'pubdate', 'pubDate', 'published', 'updated', 'dc:date');
     let t = dEl ? Date.parse(dEl.textContent.trim()) : NaN;
-    if (isNaN(t) || t > now + 3 * 3600e3) t = now - out.length * 60e3;
+    // no date in the feed: place it a few hours back so it doesn't sit on top of fresh news
+    if (isNaN(t)) t = now - 6 * 3600e3 - out.length * 60e3;
+    else if (t > now + 3 * 3600e3) t = now - out.length * 60e3;
     const words = full ? htmlText(full).split(' ').length : 0;
     out.push({ id: hash(link), title, link, desc, img, t, src: src.id, mins: words >= 150 ? Math.max(1, Math.round(words / 230)) : 0 });
   }
