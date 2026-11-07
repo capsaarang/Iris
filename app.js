@@ -1,6 +1,6 @@
 'use strict';
 /* Iris: a personal, ad-free news reader. Everything stays on this phone. */
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const DEFAULT_RELAY = 'https://isai-relay.saarangharrypotter.workers.dev';
 
 /* ---------- sources ---------- */
@@ -312,7 +312,7 @@ function renderSub() {
 }
 function topHTML() {
   const dark = document.documentElement.dataset.theme !== 'light';
-  return `<div class="top"><div class="logo"></div><div class="brand">Iris</div>
+  return `<div class="top"><svg class="logo" viewBox="20 20 60 60" aria-hidden="true"><circle cx="50" cy="50" r="28" stroke-width="7"/><ellipse cx="50" cy="50" rx="12" ry="28" stroke-width="4" opacity=".6"/><path d="M22 50h56" stroke-width="4" opacity=".6"/></svg><div class="brand">Iris</div>
     <button class="iconbtn" data-a="search" aria-label="Search">${icon('search')}</button>
     <button class="iconbtn" data-a="theme" aria-label="${dark ? 'Switch to light' : 'Switch to dark'}">${icon(dark ? 'sun' : 'moon')}</button>
     <button class="iconbtn" data-a="settings" aria-label="Settings">${icon('gear')}</button></div>
