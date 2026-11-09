@@ -1,6 +1,6 @@
 'use strict';
 /* Iris: a personal, ad-free news reader. Everything stays on this phone. */
-const VERSION = '1.0.3';
+const VERSION = '1.0.4';
 const DEFAULT_RELAY = 'https://isai-relay.saarangharrypotter.workers.dev';
 
 /* ---------- sources ---------- */
