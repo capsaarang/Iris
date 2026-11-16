@@ -5,3 +5,6 @@
   Fix: only delete Iris's own old caches.
 - Version: 1.0.4 (cache iris-v1.0.4). Commit: 52f8929
 - Also checked: RSS, Atom and RDF feeds, regions, topics, same-story grouping, story page, search, Following, Saved, Settings, theme switch, Listen. All fine.
+
+## 2026-11-16 (manual check)
+- No issues found. Re-tested feeds, regions, topics, story page, search, Following, Saved, Settings, Listen, offline.
