@@ -102,7 +102,7 @@ a{color:inherit;text-decoration:none}
 .story-hero img{width:100%;height:100%;object-fit:cover;display:block}
 .story-in{padding:16px 20px 120px;max-width:640px;margin:0 auto}
 .story-in h1{font-size:1.55em;line-height:1.25;margin:10px 0 12px;font-weight:800;letter-spacing:-.2px}
-.story-in p.sum{font-size:1.07em;line-height:1.65;color:var(--text);opacity:.9;margin-bottom:10px}
+.story-in p.sum{white-space:pre-line;font-size:1.07em;line-height:1.65;color:var(--text);opacity:.9;margin-bottom:10px}
 .story-in .note{font-size:.86em;color:var(--dim);margin-bottom:6px}
 .actions{display:flex;gap:10px;margin:16px 0}
 .actions .btn{flex:1;padding:13px}
@@ -148,3 +148,15 @@ a{color:inherit;text-decoration:none}
 #toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.88em;font-weight:500;opacity:0;pointer-events:none;transition:all .2s;z-index:60;max-width:calc(100% - 40px);text-align:center}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 body.speaking .fab{display:none}
+
+/* 1.1.0 */
+.sortbar{padding:0 18px 8px}
+.sortbar .seg{display:inline-flex;background:var(--card);border-radius:10px;padding:3px;gap:2px}
+.sortbar .seg button{padding:6px 12px;border-radius:8px;font-size:.84em;font-weight:600;color:var(--muted)}
+.sortbar .seg button.on{background:var(--acc);color:var(--onacc)}
+.mk-at{padding:0 18px 6px;font-size:.72em;color:var(--dim)}
+.rsave{margin-left:auto;display:grid;place-items:center;width:30px;height:30px;margin-top:-6px;margin-bottom:-6px;margin-right:-6px;border-radius:50%;color:var(--dim)}
+.rsave.on{color:var(--acc)}
+.rsave:active{background:var(--card2)}
+#ptr{position:fixed;top:calc(env(safe-area-inset-top) + 6px);left:50%;transform:translate(-50%,-60px);background:var(--card2);color:var(--text);font-size:.82em;font-weight:600;padding:8px 14px;border-radius:999px;box-shadow:var(--shadow);z-index:35;opacity:0;transition:opacity .15s;pointer-events:none}
+#ptr.on{opacity:1}

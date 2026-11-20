@@ -1,6 +1,6 @@
 'use strict';
 /* Iris: a personal, ad-free news reader. Everything stays on this phone. */
-const VERSION = '1.0.4';
+const VERSION = '1.1.0';
 const DEFAULT_RELAY = 'https://isai-relay.saarangharrypotter.workers.dev';
 
 /* ---------- sources ---------- */
@@ -160,7 +160,7 @@ const S = {
   off: new Set(LS.get('off', [])), muted: LS.get('muted', []), words: LS.get('words', []),
   saved: LS.get('saved', []), read: new Set(LS.get('read', [])),
   fs: LS.get('fs', 1), markets: LS.get('markets', true), relay: LS.get('relay', DEFAULT_RELAY),
-  shown: 30, mk: null,
+  shown: 30, mk: null, sort: LS.get('sort', 'top'),
 };
 const saveRead = () => LS.set('read', [...S.read].slice(-1500));
 
@@ -176,12 +176,20 @@ async function fetchText(url) {
   } finally { clearTimeout(t); }
 }
 const htmlText = (() => { const d = document.implementation.createHTMLDocument(''); return h => { const el = d.createElement('div'); el.innerHTML = String(h || '').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ''); return (el.textContent || '').replace(/\s+/g, ' ').trim(); }; })();
+const htmlBlocks = (() => { const d = document.implementation.createHTMLDocument(''); return h => { const el = d.createElement('div'); el.innerHTML = String(h || '').replace(/<(script|style)[\s\S]*?<\/\1>/gi, '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|tr|h\d|table|blockquote)>/gi, '\n').replace(/<\/t[dh]>/gi, '  '); return (el.textContent || '').replace(/[ \t\u00a0]+/g, ' ').replace(/ *\n[\s\n]*/g, '\n').trim(); }; })();
 function firstImg(h) { const m = String(h || '').match(/<img[^>]+src=["']([^"']+)["']/i); return m ? m[1] : ''; }
 function kid(el, ...names) {
   for (const c of el.children) { const n = c.nodeName.toLowerCase(); if (names.includes(n) || names.includes(c.localName)) return c; }
   return null;
 }
 function kids(el, ...names) { return [...el.children].filter(c => names.includes(c.nodeName.toLowerCase())); }
+const REGION_TZ = { india: '+0530', uk: '+0000', usa: '-0500', world: '+0000' };
+function parseDate(str, region) {
+  let s = String(str || '').trim().replace(/\s+IST$/i, ' +0530');
+  const hasZone = /(?:Z|GMT|UTC|[+-]\d{2}:?\d{2}|\b[ECMP][SD]T)$/i.test(s);
+  if (!hasZone && /\d{1,2}:\d{2}/.test(s)) s = /^\d{4}-\d{2}-\d{2}T/.test(s) ? s + REGION_TZ[region || 'world'].replace(/(\d{2})(\d{2})$/, '$1:$2') : s + ' ' + REGION_TZ[region || 'world'];
+  return Date.parse(s);
+}
 function parseFeed(xml, src) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   if (doc.querySelector('parsererror') && !doc.querySelector('item,entry')) throw new Error('Not a feed');
@@ -196,7 +204,7 @@ function parseFeed(xml, src) {
     if (!title || !link) continue;
     const rawDesc = kid(it, 'description', 'summary', 'media:description')?.textContent || '';
     const full = kid(it, 'content:encoded', 'content')?.textContent || '';
-    let desc = htmlText(rawDesc || full).replace(/The post .* appeared first on .*$/i, '').replace(/\s*Continue reading\.*\s*$/i, '').trim();
+    let desc = htmlBlocks(rawDesc || full).replace(/The post .* appeared first on .*$/i, '').replace(/\s*Continue reading\.*\s*$/i, '').trim();
     if (desc.toLowerCase() === title.toLowerCase()) desc = '';
     if (desc.length > 420) desc = desc.slice(0, 400).replace(/\s+\S*$/, '') + '…';
     let img = '';
@@ -211,7 +219,7 @@ function parseFeed(xml, src) {
     if (!/^https?:\/\//i.test(img)) img = '';
     if (!/^https?:\/\//i.test(link)) continue;
     const dEl = kid(it, 'pubdate', 'pubDate', 'published', 'updated', 'dc:date');
-    let t = dEl ? Date.parse(dEl.textContent.trim()) : NaN;
+    let t = dEl ? parseDate(dEl.textContent.trim(), src.region) : NaN;
     // no date in the feed: place it a few hours back so it doesn't sit on top of fresh news
     if (isNaN(t)) t = now - 6 * 3600e3 - out.length * 60e3;
     else if (t > now + 3 * 3600e3) t = now - out.length * 60e3;
@@ -286,6 +294,7 @@ function group(items) {
 }
 
 /* ---------- rendering ---------- */
+const saveBtn = (i, it) => { const on = S.saved.some(x => x.id === it.id); return `<span class="rsave ${on ? 'on' : ''}" role="button" tabindex="0" data-a="save-row" data-i="${i}" aria-label="${on ? 'Remove from saved' : 'Save for later'}">${icon(on ? 'bookmark-f' : 'bookmark', 'sm')}</span>`; };
 const srcLine = (it, extra = '') => { const s = SRC_BY_ID[it.src] || { name: it.srcName || '' }; return `<div class="src"><b>${esc(s.name)}</b>${s.pw ? icon('lock', 'lk') : ''}<span class="dot"></span>${esc(ago(it.t))}${it.mins ? `<span class="dot"></span>${it.mins} min read` : ''}${extra}</div>`; };
 const imgTag = u => u ? `<img src="${esc(u)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.parentNode.classList.add('hidden')">` : '';
 function alsoLine(g) { if (!g.also.length) return ''; const names = [...new Set(g.also.map(a => SRC_BY_ID[a.src]?.name).filter(Boolean))]; return `<div class="also">Also covered by ${esc(names.slice(0, 3).join(', '))}${names.length > 3 ? ` and ${names.length - 3} more` : ''}</div>`; }
@@ -298,13 +307,13 @@ function tagsFor(it) {
 function rowHTML(g, i, opts = {}) {
   const it = g.lead, img = g.img || it.img;
   return `<button class="row ${S.read.has(it.id) ? 'read' : ''}" data-a="open" data-i="${i}">
-    <div class="t">${srcLine(it)}<div class="h">${esc(it.title)}</div>${opts.desc && it.desc ? `<div class="d">${esc(it.desc)}</div>` : ''}${alsoLine(g)}${opts.notags ? '' : tagsFor(it)}</div>
+    <div class="t">${srcLine(it, opts.nosave ? '' : saveBtn(i, it))}<div class="h">${esc(it.title)}</div>${opts.desc && it.desc ? `<div class="d">${esc(it.desc)}</div>` : ''}${alsoLine(g)}${opts.notags ? '' : tagsFor(it)}</div>
     ${img ? `<div class="thumb">${imgTag(img)}</div>` : ''}</button>`;
 }
 function leadHTML(g, i) {
   const it = g.lead;
   return `<button class="lead ${S.read.has(it.id) ? 'read' : ''}" data-a="open" data-i="${i}"><div class="img">${imgTag(g.img || it.img)}</div>
-    <div class="body">${srcLine(it)}<div class="h">${esc(it.title)}</div>${alsoLine(g)}</div></button>`;
+    <div class="body">${srcLine(it, saveBtn(i, it))}<div class="h">${esc(it.title)}</div>${alsoLine(g)}</div></button>`;
 }
 let current = []; // groups on screen, for taps and Listen
 function renderSub() {
@@ -323,7 +332,8 @@ function topHTML() {
 }
 function marketsHTML() {
   if (!S.markets || !S.mk || !S.mk.length) return '';
-  return `<div class="markets">${S.mk.map(m => `<div class="mk"><span class="n">${esc(m.name)}</span><b>${esc(m.price)}</b><span class="${m.chg >= 0 ? 'up' : 'down'}">${m.chg >= 0 ? '▲' : '▼'} ${Math.abs(m.chg).toFixed(2)}%</span></div>`).join('')}</div>`;
+  const at = Math.max(...S.mk.map(m => m.at || 0));
+  return `${at ? `<div class="mk-at">Prices as of ${esc(new Date(at).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }))}, may be delayed</div>` : ''}<div class="markets">${S.mk.map(m => `<div class="mk"><span class="n">${esc(m.name)}</span><b>${esc(m.price)}</b><span class="${m.chg >= 0 ? 'up' : 'down'}">${m.chg >= 0 ? '▲' : '▼'} ${Math.abs(m.chg).toFixed(2)}%</span></div>`).join('')}</div>`;
 }
 const Views = {};
 Views.home = () => {
@@ -331,10 +341,12 @@ Views.home = () => {
   h += `<div class="regions">${REGIONS.map(([k, l]) => `<button class="${S.region === k ? 'on' : ''}" data-a="region" data-k="${k}">${l}</button>`).join('')}</div>`;
   h += `<div class="chips" id="topics">${TOPICS.map(([k, l]) => `<button class="chip ${S.topic === k ? 'on' : ''}" data-a="topic" data-k="${k}">${esc(l)}</button>`).join('')}</div>`;
   h += marketsHTML();
+  h += `<div class="sortbar"><div class="seg">${[['top', 'Top stories'], ['latest', 'Latest']].map(([k, l]) => `<button class="${S.sort === k ? 'on' : ''}" data-a="sort" data-k="${k}">${l}</button>`).join('')}</div></div>`;
   const items = visible();
   current = group(items);
   if (!S.items.length) return h + `<div class="feed">${S.loading || !S.fetchedAt ? '<div class="skel"></div>'.repeat(6) : `<div class="empty">${icon('news')}<h3>No stories yet</h3><p>Check your internet and try again.</p><br><button class="btn p" data-a="refresh">${icon('refresh', 'sm')} Try again</button></div>`}</div>`;
   if (!current.length) return h + `<div class="empty">${icon('news')}<h3>Nothing here right now</h3><p>No recent stories for ${esc(TOPIC_NAME[S.topic])} in ${esc(REGIONS.find(r => r[0] === S.region)[1])}. Try World or another topic.</p></div>`;
+  if (S.sort === 'top') current = rankTop(current);
   const leadIdx = current.slice(0, 6).findIndex(g => g.img || g.lead.img);
   const order = leadIdx > 0 ? [current[leadIdx], ...current.slice(0, leadIdx), ...current.slice(leadIdx + 1)] : current;
   current = order;
@@ -483,6 +495,17 @@ const Speak = {
   stop() { this.on = false; speechSynthesis.cancel(); $('#speak').classList.add('hidden'); document.body.classList.remove('speaking'); },
 };
 
+// Top stories: stories many outlets are covering rise to the top; official notices count for less; everything fades with age
+const NOTICE_SOURCES = new Set(['rbi', 'fed', 'boe', 'nasa', 'openai', 'google-ai']);
+function rankTop(groups) {
+  const now = Date.now();
+  const score = g => {
+    const outlets = 1 + new Set(g.also.map(a => a.src)).size;
+    const hrs = Math.max(0, (now - g.lead.t) / 3600e3);
+    return (1 + (outlets - 1) * 1.6) * (NOTICE_SOURCES.has(g.lead.src) ? 0.35 : 1) * (g.img || g.lead.img ? 1.1 : 1) / Math.pow(hrs + 2, 1.25);
+  };
+  return groups.map(g => [g, score(g)]).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+}
 /* ---------- market strip ---------- */
 const MARKETS = [['^GSPC', 'S&P 500'], ['^NSEI', 'Nifty 50'], ['^FTSE', 'FTSE 100'], ['INR=X', 'USD/INR']];
 async function loadMarkets() {
@@ -491,7 +514,7 @@ async function loadMarkets() {
     try {
       const j = JSON.parse(await fetchText(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`));
       const m = j.chart.result[0].meta, p = m.regularMarketPrice, prev = m.chartPreviousClose || m.previousClose;
-      return { name, price: p.toLocaleString(undefined, { maximumFractionDigits: sym === 'INR=X' ? 2 : 0, minimumFractionDigits: sym === 'INR=X' ? 2 : 0 }), chg: prev ? (p - prev) / prev * 100 : 0 };
+      return { at: (m.regularMarketTime || 0) * 1000, name, price: p.toLocaleString(undefined, { maximumFractionDigits: sym === 'INR=X' ? 2 : 0, minimumFractionDigits: sym === 'INR=X' ? 2 : 0 }), chg: prev ? (p - prev) / prev * 100 : 0 };
     } catch { return null; }
   }));
   const ok = out.filter(Boolean);
@@ -516,6 +539,12 @@ const A = {
     const b = document.querySelector('#layer [data-a="save"]'); const on = i < 0;
     b.innerHTML = icon(on ? 'bookmark-f' : 'bookmark'); b.style.color = on ? 'var(--acc)' : '';
   },
+  'save-row': d => {
+    const g = current[+d.i]; if (!g) return; const it = g.lead, i = S.saved.findIndex(x => x.id === it.id);
+    if (i >= 0) { S.saved.splice(i, 1); toast('Removed from saved'); } else { S.saved.unshift(Object.assign({}, it, { img: g.img || it.img, savedAt: Date.now() })); toast('Saved for later'); }
+    LS.set('saved', S.saved); render(true);
+  },
+  sort: d => { S.sort = d.k; LS.set('sort', d.k); window.scrollTo(0, 0); render(); },
   share: async () => { const it = storyGroup.lead; try { if (navigator.share) await navigator.share({ title: it.title, url: it.link }); else { await navigator.clipboard.writeText(it.link); toast('Link copied'); } } catch { } },
   'listen-story': () => Speak.start([storyGroup.lead]),
   'listen-feed': () => Speak.start(current.slice(0, 40).map(g => g.lead)),
@@ -544,6 +573,19 @@ document.addEventListener('keydown', e => {
 });
 function applyFs() { document.documentElement.style.setProperty('--fs', S.fs); }
 function setThemeColor() { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = document.documentElement.dataset.theme === 'light' ? '#f6f3ec' : '#0e0d14'; }
+
+/* ---------- pull down on Home to refresh ---------- */
+(function pullToRefresh() {
+  let y0 = null, pulled = 0; const el = document.createElement('div'); el.id = 'ptr'; document.body.appendChild(el);
+  addEventListener('touchstart', e => { y0 = S.tab === 'home' && !layerOpen && window.scrollY <= 0 && !S.loading ? e.touches[0].clientY : null; pulled = 0; }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (y0 == null) return; pulled = Math.max(0, e.touches[0].clientY - y0);
+    if (pulled < 12) { el.classList.remove('on'); return; }
+    el.classList.add('on'); el.style.transform = `translate(-50%, ${Math.min(pulled, 110) * 0.6}px)`;
+    el.textContent = pulled > 80 ? 'Release to refresh' : 'Pull to refresh';
+  }, { passive: true });
+  addEventListener('touchend', () => { if (y0 != null && pulled > 80) refresh(true); y0 = null; pulled = 0; el.classList.remove('on'); el.style.transform = ''; });
+})();
 
 /* ---------- start ---------- */
 (async function boot() {

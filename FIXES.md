@@ -8,3 +8,11 @@
 
 ## 2026-11-16 (manual check)
 - No issues found. Re-tested feeds, regions, topics, story page, search, Following, Saved, Settings, Listen, offline.
+
+## 2026-11-20 (usability fixes, 1.1.0)
+- Bug: sources that leave the time zone off their dates (RBI) were read as future times and pinned to the top as "Just now". Dates are now read in the source's own time zone.
+- Added: Top stories / Latest switch on Home. Top stories ranks stories covered by more outlets higher, official notices lower, and fades with age.
+- Added: pull down on Home to refresh.
+- Added: bookmark button on every story in the feed to save without opening it.
+- Improved: summaries keep their line breaks, so tables and paragraphs no longer run together.
+- Added: "Prices as of" time above the market strip.
